@@ -1,7 +1,7 @@
 <?php
 
 $plugin['name'] = 'soo_article_filter';
-$plugin['version'] = '0.2.1';
+$plugin['version'] = '0.2.2';
 $plugin['author'] = 'Jeff Soo';
 $plugin['author_uri'] = 'http://ipsedixit.net/txp/';
 $plugin['description'] = 'Create filtered list of articles before sending to txp:article or txp:article_custom';
@@ -25,6 +25,7 @@ function soo_article_filter( $atts, $thing ) {
 	$customlAtts = array_null(array_flip($customFields));
 	extract(lAtts(array(
 		'expires'		=> null,	// accept 'any', 'past', 'future', or 0
+		'article_image'	=> null,	// boolean: 0 = no image, 1 = has image
 		'multidoc'		=> null,	// for soo_multidoc compatibility
 	) + $customlAtts, $atts));
 	
@@ -42,6 +43,9 @@ function soo_article_filter( $atts, $thing ) {
 			case 0:
 				$where[] = 'Expires = 0';
 		}
+
+	if ( ! is_null($article_image) )
+		$where[] = 'Image ' . ( $article_image ? '!' : '' ) . "= ''";
 
 	if ( $customFields )
 		foreach( $customFields as $i => $field )
@@ -142,6 +146,7 @@ None %(required)required%, but without attributes the tag doesn't do anything us
 * @expires@ _("past", "future", "any", or 0)_
 If set to "past", "future", or "any", only include articles with an @Expires@ value. If  set to "0", only include articles without an @Expires@ value. (%(default)Default% is @null@; no filter on @Expires@.)
 * @customfieldname@ _(empty or regexp pattern)_ replace "customfieldname" with any custom field name as set in site preferences. If the attribute value is empty, only articles with an empty value for this custom field will be included. Otherwise the attribute value will be treated as a "MySQL regular expression pattern":http://dev.mysql.com/doc/refman/5.1/en/regexp.html.
+* @article_image@ _(boolean)_ If @1@, only show articles with an article image. If @0@, only show articles without an article image. If not set (the %(default)default%), article image has no effect.
 * @multidoc@ _(boolean)_ %(default)default% false
 For use with the "soo_multidoc":http://ipsedixit.net/txp/24/multidoc plugin. See "note":#multidoc below.
 
@@ -185,6 +190,14 @@ pre. <txp:soo_article_filter my-custom-field="^[[:digit:]]+$">
 <txp:article />
 </txp:soo_article_filter>
 
+h3. Only show articles that have an article image
+
+pre. <txp:soo_article_filter article_image="1">
+<txp:article>
+<txp:permlink><txp:article_image thumbnail="1" /></txp:permlink>
+</txp:article>
+</txp:soo_article_filter>
+
 h2(#notes). Technical notes
 
 h3. Troubleshooting
@@ -211,6 +224,10 @@ The "soo_multidoc":http://ipsedixit.net/txp/24/multidoc plugin also uses the tem
 Note that, unlike Multidoc's built-in filter, @soo_article_filter@ does not distinguish between list and individual article context, so if your Multidoc setup uses the same @article@ tag for lists and individual articles you will have change this. (This is deliberate; it allows you to use @soo_article_filter@ for an @article_custom@ list on an individual article page.)
 
 h2(#history). Version history
+
+h3. 0.2.2 (Sept 28, 2009)
+
+New @article_image@ attribute
 
 h3. 0.2.1 (July 7, 2009)
 
