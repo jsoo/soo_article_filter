@@ -1,9 +1,9 @@
 <?php
 
 $plugin['name'] = 'soo_article_filter';
-$plugin['version'] = '0.2';
+$plugin['version'] = '0.2.1';
 $plugin['author'] = 'Jeff Soo';
-$plugin['author_uri'] = 'http://ipsedixit.net/';
+$plugin['author_uri'] = 'http://ipsedixit.net/txp/';
 $plugin['description'] = 'Create filtered list of articles before sending to txp:article or txp:article_custom';
 
 // Plugin types:
@@ -18,10 +18,14 @@ $plugin['type'] = 0;
 
 function soo_article_filter( $atts, $thing ) {
 
+	global $pretext;
+	if ( $pretext['q'] ) return parse($thing);
+
 	$customFields = getCustomFields();
 	$customlAtts = array_null(array_flip($customFields));
 	extract(lAtts(array(
 		'expires'		=> null,	// accept 'any', 'past', 'future', or 0
+		'multidoc'		=> null,	// for soo_multidoc compatibility
 	) + $customlAtts, $atts));
 	
 	if ( ! is_null($expires) )
@@ -41,7 +45,7 @@ function soo_article_filter( $atts, $thing ) {
 
 	if ( $customFields )
 		foreach( $customFields as $i => $field )
-			if ( isset($atts[$field]) ) {
+			if ( ! isset($$field) and isset($atts[$field]) ) {
 				$value = $atts[$field];
 				switch ( $value ) {
 					case '':
@@ -51,6 +55,11 @@ function soo_article_filter( $atts, $thing ) {
 						$where[] = "custom_$i regexp '$value'";
 				}
 			}
+	
+	if ( $multidoc and _soo_multidoc_ids_init() ) {
+		global $soo_multidoc;
+		$where[] = "ID not in (" . implode(',', $soo_multidoc['noindex']) . ")";
+	}
 	
 	$where = isset($where) ? ' where ' . implode(' and ', $where) : '';
 	
@@ -97,6 +106,8 @@ div#sed_help .default {color:green;}
 
 h1. soo_article_filter
 
+ <div id="toc">
+
 h2. Contents
 
 * "Overview":#overview
@@ -105,6 +116,8 @@ h2. Contents
 * "Examples":#examples
 * "Technical notes":#notes
 * "History":#history
+
+ </div>
 
 h2(#overview). Overview
 
@@ -120,6 +133,8 @@ pre. <txp:soo_article_filter>
 <txp:article />
 </txp:soo_article_filter>
 
+*Note:* the filter will not be applied to search results.
+
 h2(#attributes). Attributes
 
 None %(required)required%, but without attributes the tag doesn't do anything useful.
@@ -127,6 +142,8 @@ None %(required)required%, but without attributes the tag doesn't do anything us
 * @expires@ _("past", "future", "any", or 0)_
 If set to "past", "future", or "any", only include articles with an @Expires@ value. If  set to "0", only include articles without an @Expires@ value. (%(default)Default% is @null@; no filter on @Expires@.)
 * @customfieldname@ _(empty or regexp pattern)_ replace "customfieldname" with any custom field name as set in site preferences. If the attribute value is empty, only articles with an empty value for this custom field will be included. Otherwise the attribute value will be treated as a "MySQL regular expression pattern":http://dev.mysql.com/doc/refman/5.1/en/regexp.html.
+* @multidoc@ _(boolean)_ %(default)default% false
+For use with the "soo_multidoc":http://ipsedixit.net/txp/24/multidoc plugin. See "note":#multidoc below.
 
 h2(#examples). Examples
 
@@ -174,6 +191,8 @@ h3. Troubleshooting
 
 You might get an error like this: @Textpattern Warning: Not unique table/alias: 'textpattern'@. It seems that some configurations allow the shortcut of creating the temporary table and selecting from the actual table of the same name in the same statement, but some don't. Performance-wise it is certainly better to use a single statement, but if this doesn't work for you, use the alternate version of the plugin, included in the download.
 
+If you use "Multidoc":http://ipsedixit.net/txp/24/multidoc and see an error message including @Table 'textpattern' already exists@, see the "note on Multidoc compatibility":#multidoc, below.
+
 h3. Performance considerations
 
 Most plugins that give you a souped-up equivalent of @article@ or @article_custom@ have to duplicate and modify @doArticles()@ plus a couple of other core Txp functions. Less than ideal, at least in terms of ease of plugin authoring, because @doArticles()@ is quite a lot of code to duplicate and edit in a plugin.
@@ -182,7 +201,20 @@ This plugin takes a very different approach--it creates a temporary table holdin
 
 Might be another story on a highly-optimized, large, high-traffic website where maximum performance is a major concern.
 
+h3(#multidoc). Multidoc compatibility
+
+The "soo_multidoc":http://ipsedixit.net/txp/24/multidoc plugin also uses the temporary table trick to filter articles, which can only be done once per page load. To achieve compatibility between *soo_article_filter* and *soo_multidoc*, follow these steps:
+
+* In Multidoc prefs (click *soo_multidoc*'s "Options" link in the plugin list) set the "Show all" preference to "yes".
+* As needed, use @soo_article_filter@, with @multidoc="1"@, to filter Multidoc interior pages. 
+
+Note that, unlike Multidoc's built-in filter, @soo_article_filter@ does not distinguish between list and individual article context, so if your Multidoc setup uses the same @article@ tag for lists and individual articles you will have change this. (This is deliberate; it allows you to use @soo_article_filter@ for an @article_custom@ list on an individual article page.)
+
 h2(#history). Version history
+
+h3. 0.2.1 (July 7, 2009)
+
+"soo_multidoc":http://ipsedixit.net/txp/24/multidoc compatibility.
 
 h3. 0.2 (July 4, 2009)
 
