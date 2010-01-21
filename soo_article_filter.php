@@ -1,7 +1,7 @@
 <?php
 
 $plugin['name'] = 'soo_article_filter';
-$plugin['version'] = '0.2.2';
+$plugin['version'] = '0.2.3';
 $plugin['author'] = 'Jeff Soo';
 $plugin['author_uri'] = 'http://ipsedixit.net/txp/';
 $plugin['description'] = 'Create filtered list of articles before sending to txp:article or txp:article_custom';
@@ -21,14 +21,14 @@ function soo_article_filter( $atts, $thing ) {
 	global $pretext;
 	if ( $pretext['q'] ) return parse($thing);
 
-	$customFields = getCustomFields();
-	$customlAtts = array_null(array_flip($customFields));
-	extract(lAtts(array(
+	$customFields = getCustomFields();						// field names
+	$customAtts = array_null(array_flip($customFields));
+	$standardAtts = array(
 		'expires'		=> null,	// accept 'any', 'past', 'future', or 0
 		'article_image'	=> null,	// boolean: 0 = no image, 1 = has image
 		'multidoc'		=> null,	// for soo_multidoc compatibility
-	) + $customlAtts, $atts));
-	
+	);
+	extract(lAtts($standardAtts + $customAtts, $atts));
 	if ( ! is_null($expires) )
 		switch ( $expires ) {
 			case 'any':
@@ -49,7 +49,8 @@ function soo_article_filter( $atts, $thing ) {
 
 	if ( $customFields )
 		foreach( $customFields as $i => $field )
-			if ( ! isset($$field) and isset($atts[$field]) ) {
+				// to prevent conflicts between named atts and custom fields
+			if ( ! array_key_exists($field, $standardAtts) and isset($atts[$field]) ) {
 				$value = $atts[$field];
 				switch ( $value ) {
 					case '':
@@ -202,7 +203,7 @@ h2(#notes). Technical notes
 
 h3. Troubleshooting
 
-You might get an error like this: @Textpattern Warning: Not unique table/alias: 'textpattern'@. It seems that some configurations allow the shortcut of creating the temporary table and selecting from the actual table of the same name in the same statement, but some don't. Performance-wise it is certainly better to use a single statement, but if this doesn't work for you, use the alternate version of the plugin, included in the download.
+You might get an error like this: @Textpattern Warning: Not unique table/alias: 'textpattern'@. It seems that some configurations allow the shortcut of creating the temporary table and selecting from the actual table of the same name in the same statement, but some don't. Performance-wise it is certainly better to use a single statement, but if this doesn't work for you, -use the alternate version of the plugin, included in the download- please "contact me":http://ipsedixit.net/info/2/contact.
 
 If you use "Multidoc":http://ipsedixit.net/txp/24/multidoc and see an error message including @Table 'textpattern' already exists@, see the "note on Multidoc compatibility":#multidoc, below.
 
@@ -224,6 +225,10 @@ The "soo_multidoc":http://ipsedixit.net/txp/24/multidoc plugin also uses the tem
 Note that, unlike Multidoc's built-in filter, @soo_article_filter@ does not distinguish between list and individual article context, so if your Multidoc setup uses the same @article@ tag for lists and individual articles you will have change this. (This is deliberate; it allows you to use @soo_article_filter@ for an @article_custom@ list on an individual article page.)
 
 h2(#history). Version history
+
+h3. 0.2.3 (Jan 20, 2010)
+
+* Fixed custom field bug
 
 h3. 0.2.2 (Sept 28, 2009)
 
