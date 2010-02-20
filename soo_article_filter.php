@@ -1,7 +1,7 @@
 <?php
 
 $plugin['name'] = 'soo_article_filter';
-$plugin['version'] = '0.2.4';
+$plugin['version'] = '0.2.5';
 $plugin['author'] = 'Jeff Soo';
 $plugin['author_uri'] = 'http://ipsedixit.net/txp/';
 $plugin['description'] = 'Create filtered list of articles before sending to txp:article or txp:article_custom';
@@ -82,7 +82,8 @@ function soo_article_filter( $atts, $thing ) {
 		}
 	}
 		
-	safe_query("create temporary table $table select $select from $table" . $where);
+	if ( ! safe_query("create temporary table $table select $select from $table" . $where) )
+		return;
 	
 	if ( ! empty($update) )
 		foreach ( $update as $query )
@@ -152,7 +153,7 @@ h2. Contents
 
 h2(#requirements). Requirements
 
-This plugin relies on the trick of creating a temporary database table in memory. So the MySQL user you have assigned to Textpattern (indicated in config.php) must have @CREATE@ privileges.
+This plugin relies on the trick of creating a temporary database table in memory. So the MySQL user you have assigned to Textpattern (indicated in config.php) must have @CREATE@ privileges. If table creation fails, the plugin will return blank (as of version 0.2.5).
 
 h2(#overview). Overview
 
@@ -275,6 +276,10 @@ The "soo_multidoc":http://ipsedixit.net/txp/24/multidoc plugin also uses the tem
 Note that, unlike Multidoc's built-in filter, @soo_article_filter@ does not distinguish between list and individual article context, so if your Multidoc setup uses the same @article@ tag for lists and individual articles you will have change this. (This is deliberate; it allows you to use @soo_article_filter@ for an @article_custom@ list on an individual article page.)
 
 h2(#history). Version history
+
+h3. 0.2.5 (Feb 19, 2010)
+
+* Checks that temporary table creation was successful, else returns nothing.
 
 h3. 0.2.4 (Feb 19, 2010)
 
