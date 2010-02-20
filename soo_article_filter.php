@@ -1,7 +1,7 @@
 <?php
 
 $plugin['name'] = 'soo_article_filter';
-$plugin['version'] = '0.2.3';
+$plugin['version'] = '0.2.4';
 $plugin['author'] = 'Jeff Soo';
 $plugin['author_uri'] = 'http://ipsedixit.net/txp/';
 $plugin['description'] = 'Create filtered list of articles before sending to txp:article or txp:article_custom';
@@ -27,6 +27,8 @@ function soo_article_filter( $atts, $thing ) {
 		'expires'		=> null,	// accept 'any', 'past', 'future', or 0
 		'article_image'	=> null,	// boolean: 0 = no image, 1 = has image
 		'multidoc'		=> null,	// for soo_multidoc compatibility
+		'index_ignore'	=> 'a,an,the',	// leading words to move in index titles
+		'index_field'	=> null,	// custom field name for index-style title
 	);
 	extract(lAtts($standardAtts + $customAtts, $atts));
 	if ( ! is_null($expires) )
@@ -66,10 +68,26 @@ function soo_article_filter( $atts, $thing ) {
 		$where[] = "ID not in (" . implode(',', $soo_multidoc['noindex']) . ")";
 	}
 	
+	$select = '*';
+	$table = safe_pfx('textpattern');
 	$where = isset($where) ? ' where ' . implode(' and ', $where) : '';
 	
-	$table = safe_pfx('textpattern');
-	safe_query("create temporary table $table select * from $table" . $where);
+	if ( $index_field ) {
+		$i = array_search($index_field, $customFields);
+		if ( $i ) {
+			$regexp = "'" . implode('|', do_list($index_ignore)) . "'";
+			$select .= ", trim(Title) as index_title, substring_index(trim(Title),' ',1) as first_word, substring(trim(Title), locate(' ',trim(Title))+1) as remaining_words";
+			$update[] = "update $table set custom_$i = concat(remaining_words, ', ', first_word) where first_word regexp $regexp and custom_$i = ''";
+			$update[] = "update $table set custom_$i = trim(Title) where custom_$i = ''";
+		}
+	}
+		
+	safe_query("create temporary table $table select $select from $table" . $where);
+	
+	if ( ! empty($update) )
+		foreach ( $update as $query )
+			safe_query($query);
+	
 	$out = parse($thing);
 	safe_query("drop temporary table $table");
 	return $out;
@@ -115,18 +133,32 @@ h1. soo_article_filter
 
 h2. Contents
 
+* "Requirements":#requirements
 * "Overview":#overview
 * "Usage":#usage
 * "Attributes":#attributes
 * "Examples":#examples
+** "Expired articles":#expired
+** "Custom field not empty":#custom_set
+** "Custom field empty":#custom_not_set
+** "Custom field includes ...":#custom_includes
+** "Custom field matches regular expression":#custom_regexp
+** "Articles with an assigned image":#image
+** "Alphabetical index":#index
 * "Technical notes":#notes
 * "History":#history
 
  </div>
 
+h2(#requirements). Requirements
+
+This plugin relies on the trick of creating a temporary database table in memory. So the MySQL user you have assigned to Textpattern (indicated in config.php) must have @CREATE@ privileges.
+
 h2(#overview). Overview
 
 Contains one tag, @soo_article_filter@. It allows you to pre-select articles to limit the scope of an @article@ or @article_custom@ tag, using selection criteria not offered by those tags. In short, it's like adding selection attributes to one of those tags.
+
+As of version 0.2.4 there is also the option to add index-style titles to a custom field. E.g., "The First Article" becomes "First Article, The". You can then access that custom field with the usual Txp custom field tags, allowing you to create alphabetical indexes.
 
 Thanks to "net-carver":http://txp-plugins.netcarving.com/ for clueing me in to MySQL temporary tables.
 
@@ -150,10 +182,12 @@ If set to "past", "future", or "any", only include articles with an @Expires@ va
 * @article_image@ _(boolean)_ If @1@, only show articles with an article image. If @0@, only show articles without an article image. If not set (the %(default)default%), article image has no effect.
 * @multidoc@ _(boolean)_ %(default)default% false
 For use with the "soo_multidoc":http://ipsedixit.net/txp/24/multidoc plugin. See "note":#multidoc below.
+* @index_ignore@ _(list)_ Comma-separated list of leading articles to transpose, when used in combination with @index_field@ (%(default)Default% "A,An,The")
+* @index_field@ _(custom field name)_ Set this to the name of an existing custom field to hold index-style titles (e.g. "The Title" becomes "Title, The"). %(default)Default% empty.
 
 h2(#examples). Examples
 
-h3. Only show expired articles
+h3(#expired). Only show expired articles
 
 You must set "Publish expired articles" to "Yes" in advanced site preferences.
 
@@ -161,7 +195,7 @@ pre. <txp:soo_article_filter expires="past">
 <txp:article />
 </txp:soo_article_filter>
 
-h3. Only show articles with "my-custom-field" set
+h3(#custom_set). Only show articles with "my-custom-field" set
 
 Note the value, @".+"@. This will match any character. Note also that you can accomplish the same thing without a plugin, using the technique discussed in "this Txp forum thread":http://forum.textpattern.com/viewtopic.php?pid=210453#p210453.
 
@@ -169,13 +203,13 @@ pre. <txp:soo_article_filter my-custom-field=".+">
 <txp:article />
 </txp:soo_article_filter>
 
-h3. Only show articles with "my-custom-field" not set
+h3(#custom_not_set). Only show articles with "my-custom-field" not set
 
 pre. <txp:soo_article_filter my-custom-field="">
 <txp:article />
 </txp:soo_article_filter>
 
-h3. Only show articles where "my-custom-field" includes "blue"
+h3(#custom_includes). Only show articles where "my-custom-field" includes "blue"
 
 Note: this is not case sensitive. Would match "Blues", "true blue", etc. @article@ and @article_custom@ already work this way if you add the wildcard character @%@ (e.g., @my-custom-field="%blue%"@), so you don't need this plugin just to do this.
 
@@ -183,7 +217,7 @@ pre. <txp:soo_article_filter my-custom-field="blue">
 <txp:article />
 </txp:soo_article_filter>
 
-h3. Only show articles where "my-custom-field" contains only digits
+h3(#custom_regexp). Only show articles where "my-custom-field" contains only digits
 
 Note the value, @"^[[:digit:]]+$"@. This is a "MySQL regexp pattern":http://dev.mysql.com/doc/refman/5.1/en/regexp.html, *not* a "PCRE pattern":http://us.php.net/manual/en/reference.pcre.pattern.syntax.php.
 
@@ -191,13 +225,29 @@ pre. <txp:soo_article_filter my-custom-field="^[[:digit:]]+$">
 <txp:article />
 </txp:soo_article_filter>
 
-h3. Only show articles that have an article image
+h3(#image). Only show articles that have an article image
 
 pre. <txp:soo_article_filter article_image="1">
 <txp:article>
 <txp:permlink><txp:article_image thumbnail="1" /></txp:permlink>
 </txp:article>
 </txp:soo_article_filter>
+
+h3(#index). An alphabetical index using @index_ignore@ and @index_field@
+
+pre. <txp:soo_article_filter index_field="index_title">
+<txp:article sort="custom_3 asc" wraptag="ul" break="li">
+<txp:permlink><txp:custom_field name="index_title" /></txp:permlink>
+</txp:article>
+</txp:soo_article_filter>
+
+When @index_field@ is set to the name of an existing custom field, this field will receive an index-style version of the article title, e.g. "The Title" becomes "Title, The". You can then sort on and/or display the index-style title with standard Textpattern custom field tags and attributes, as shown.
+
+Leading words getting special treatment are those listed in @index_ignore@. This defaults to English articles, i.e. "A,An,The".
+
+The custom field has to be one you have actually created in site prefs. In the example it is called "index_title", and it is custom field #3. When saving articles leave this field blank, otherwise @soo_article_filter@ will leave it unchanged.
+
+The index-style title is created only within the @soo_article_filter@ container -- corresponding custom field in the database remains blank.
 
 h2(#notes). Technical notes
 
@@ -225,6 +275,10 @@ The "soo_multidoc":http://ipsedixit.net/txp/24/multidoc plugin also uses the tem
 Note that, unlike Multidoc's built-in filter, @soo_article_filter@ does not distinguish between list and individual article context, so if your Multidoc setup uses the same @article@ tag for lists and individual articles you will have change this. (This is deliberate; it allows you to use @soo_article_filter@ for an @article_custom@ list on an individual article page.)
 
 h2(#history). Version history
+
+h3. 0.2.4 (Feb 19, 2010)
+
+* Create properly-alphabetized indexes with the new @index_ignore@ and @index_field@ attributes.
 
 h3. 0.2.3 (Jan 20, 2010)
 
