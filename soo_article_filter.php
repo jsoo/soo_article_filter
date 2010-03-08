@@ -1,7 +1,7 @@
 <?php
 
 $plugin['name'] = 'soo_article_filter';
-$plugin['version'] = '0.2.5';
+$plugin['version'] = '0.2.6';
 $plugin['author'] = 'Jeff Soo';
 $plugin['author_uri'] = 'http://ipsedixit.net/txp/';
 $plugin['description'] = 'Create filtered list of articles before sending to txp:article or txp:article_custom';
@@ -29,6 +29,8 @@ function soo_article_filter( $atts, $thing ) {
 		'multidoc'		=> null,	// for soo_multidoc compatibility
 		'index_ignore'	=> 'a,an,the',	// leading words to move in index titles
 		'index_field'	=> null,	// custom field name for index-style title
+		'update_set'	=> null,	// SET clause for custom update query
+		'update_where'	=> null,	// WHERE clause for custom update query
 	);
 	extract(lAtts($standardAtts + $customAtts, $atts));
 	if ( ! is_null($expires) )
@@ -77,17 +79,30 @@ function soo_article_filter( $atts, $thing ) {
 		if ( $i ) {
 			$regexp = "'" . implode('|', do_list($index_ignore)) . "'";
 			$select .= ", trim(Title) as index_title, substring_index(trim(Title),' ',1) as first_word, substring(trim(Title), locate(' ',trim(Title))+1) as remaining_words";
-			$update[] = "update $table set custom_$i = concat(remaining_words, ', ', first_word) where first_word regexp $regexp and custom_$i = ''";
-			$update[] = "update $table set custom_$i = trim(Title) where custom_$i = ''";
+			$update[] = array(
+				'set' => "custom_$i = concat(remaining_words, ', ', first_word)",
+				'where' => "first_word regexp $regexp and custom_$i = ''",
+			);
+			$update[] = array(
+				'set' => "custom_$i = trim(Title)",
+				'where' => "custom_$i = ''",
+			);
+			
 		}
 	}
 		
 	if ( ! safe_query("create temporary table $table select $select from $table" . $where) )
 		return;
 	
+	if ( $update_set )
+		$update[] = array(
+			'set' => $update_set,
+			'where' => $update_where ? $update_where : '1=1',
+		);
+	
 	if ( ! empty($update) )
-		foreach ( $update as $query )
-			safe_query($query);
+		foreach ( $update as $u )
+			safe_update('textpattern', $u['set'], $u['where']);
 	
 	$out = parse($thing);
 	safe_query("drop temporary table $table");
@@ -146,7 +161,12 @@ h2. Contents
 ** "Custom field matches regular expression":#custom_regexp
 ** "Articles with an assigned image":#image
 ** "Alphabetical index":#index
+** "Change article status":#update
 * "Technical notes":#notes
+** "Safety":#safety
+** "Troubleshooting":#troubleshooting
+** "Performance considerations":#performance
+** "Multidoc compatibility":#multidoc
 * "History":#history
 
  </div>
@@ -160,6 +180,8 @@ h2(#overview). Overview
 Contains one tag, @soo_article_filter@. It allows you to pre-select articles to limit the scope of an @article@ or @article_custom@ tag, using selection criteria not offered by those tags. In short, it's like adding selection attributes to one of those tags.
 
 As of version 0.2.4 there is also the option to add index-style titles to a custom field. E.g., "The First Article" becomes "First Article, The". You can then access that custom field with the usual Txp custom field tags, allowing you to create alphabetical indexes.
+
+As of version 0.2.6 you can do an additional @UPDATE@ query on the temporary table, by using the @update_set@ and @update_where@ attributes. One use for this is to change article status from "Draft" to "Live" or "Sticky", allowing you to display draft articles publicly.
 
 Thanks to "net-carver":http://txp-plugins.netcarving.com/ for clueing me in to MySQL temporary tables.
 
@@ -185,6 +207,9 @@ If set to "past", "future", or "any", only include articles with an @Expires@ va
 For use with the "soo_multidoc":http://ipsedixit.net/txp/24/multidoc plugin. See "note":#multidoc below.
 * @index_ignore@ _(list)_ Comma-separated list of leading articles to transpose, when used in combination with @index_field@ (%(default)Default% "A,An,The")
 * @index_field@ _(custom field name)_ Set this to the name of an existing custom field to hold index-style titles (e.g. "The Title" becomes "Title, The"). %(default)Default% empty.
+* @update_set@ _(SQL clause)_ %(default)default% empty. Set this (and, optionally, @update_where@) to run an @UPDATE@ query on the temporary table.
+* @update_where@ _(SQL clause)_ %(default)default% "1=1". Use this in conjunction with @update_where@ to run an @UPDATE@ query on the temporary table.
+
 
 h2(#examples). Examples
 
@@ -248,17 +273,31 @@ Leading words getting special treatment are those listed in @index_ignore@. This
 
 The custom field has to be one you have actually created in site prefs. In the example it is called "index_title", and it is custom field #3. When saving articles leave this field blank, otherwise @soo_article_filter@ will leave it unchanged.
 
-The index-style title is created only within the @soo_article_filter@ container -- corresponding custom field in the database remains blank.
+The index-style title is created only within the @soo_article_filter@ container &mdash; corresponding custom field in the database remains blank.
+
+h3(#update). Add an @UPDATE@ query to change article status
+
+The @update_set@ attribute allows you to run an @UPDATE@ query on the temporary table. For example, to temporarily change the status of all "draft" articles in the "News" section to "live" (Textpattern's status code for "live" is 4 and for "draft" is 1):
+
+pre. <txp:soo_article_filter update_set="Status=4" update_where="Status=1 AND Section='News'">
+<txp:article />
+</txp:soo_article_filter>
 
 h2(#notes). Technical notes
 
-h3. Troubleshooting
+h3(#safety). Safety
+
+This plugin attempts to run @CREATE@, @DROP@, and, optionally, @UPDATE@ queries. There is a safety check: if the initial @CREATE TEMPORARY TABLE@ query fails, the plugin exits immediately, without parsing the tag contents. However, the plugin has not been tested extensively, and you should certainly keep regular database backups if you are doing anything especially interesting with this plugin. Of course, you should keep regular database backups in any event.
+
+One thing you should absolutely %(warning)NOT% do is assume that it is safe to do anything you like within the tag contents. The main issue is that if the page context is search results (i.e., the @q@ query parameter is set), the tag will simply parse its contents and return them as is. If you stuck a raw query into the tag contents on the assumption the query would only run when the temporary textpattern table exists, you'd regret it. Maybe not today, maybe not tomorrow, but soon, and for the rest of your life.
+
+h3(#troubleshooting). Troubleshooting
 
 You might get an error like this: @Textpattern Warning: Not unique table/alias: 'textpattern'@. It seems that some configurations allow the shortcut of creating the temporary table and selecting from the actual table of the same name in the same statement, but some don't. Performance-wise it is certainly better to use a single statement, but if this doesn't work for you, -use the alternate version of the plugin, included in the download- please "contact me":http://ipsedixit.net/info/2/contact.
 
 If you use "Multidoc":http://ipsedixit.net/txp/24/multidoc and see an error message including @Table 'textpattern' already exists@, see the "note on Multidoc compatibility":#multidoc, below.
 
-h3. Performance considerations
+h3(#performance). Performance considerations
 
 Most plugins that give you a souped-up equivalent of @article@ or @article_custom@ have to duplicate and modify @doArticles()@ plus a couple of other core Txp functions. Less than ideal, at least in terms of ease of plugin authoring, because @doArticles()@ is quite a lot of code to duplicate and edit in a plugin.
 
@@ -277,17 +316,21 @@ Note that, unlike Multidoc's built-in filter, @soo_article_filter@ does not dist
 
 h2(#history). Version history
 
+h3. 0.2.6 (Mar 8, 2010)
+
+New attributes, @update_set@ and @update_where@, allowing an additional @UPDATE@ query on the temporary table.
+
 h3. 0.2.5 (Feb 19, 2010)
 
-* Checks that temporary table creation was successful, else returns nothing.
+Checks that temporary table creation was successful, else returns nothing.
 
 h3. 0.2.4 (Feb 19, 2010)
 
-* Create properly-alphabetized indexes with the new @index_ignore@ and @index_field@ attributes.
+Create properly-alphabetized indexes with the new @index_ignore@ and @index_field@ attributes.
 
 h3. 0.2.3 (Jan 20, 2010)
 
-* Fixed custom field bug
+Fixed custom field bug
 
 h3. 0.2.2 (Sept 28, 2009)
 
