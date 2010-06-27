@@ -1,7 +1,7 @@
 <?php
 
 $plugin['name'] = 'soo_article_filter';
-$plugin['version'] = '0.2.6';
+$plugin['version'] = '0.2.7';
 $plugin['author'] = 'Jeff Soo';
 $plugin['author_uri'] = 'http://ipsedixit.net/txp/';
 $plugin['description'] = 'Create filtered list of articles before sending to txp:article or txp:article_custom';
@@ -77,7 +77,7 @@ function soo_article_filter( $atts, $thing ) {
 	if ( $index_field ) {
 		$i = array_search($index_field, $customFields);
 		if ( $i ) {
-			$regexp = "'" . implode('|', do_list($index_ignore)) . "'";
+			$regexp = "'^(" . implode('|', do_list($index_ignore)) . ")$'";
 			$select .= ", trim(Title) as index_title, substring_index(trim(Title),' ',1) as first_word, substring(trim(Title), locate(' ',trim(Title))+1) as remaining_words";
 			$update[] = array(
 				'set' => "custom_$i = concat(remaining_words, ', ', first_word)",
@@ -315,6 +315,10 @@ The "soo_multidoc":http://ipsedixit.net/txp/24/multidoc plugin also uses the tem
 Note that, unlike Multidoc's built-in filter, @soo_article_filter@ does not distinguish between list and individual article context, so if your Multidoc setup uses the same @article@ tag for lists and individual articles you will have change this. (This is deliberate; it allows you to use @soo_article_filter@ for an @article_custom@ list on an individual article page.)
 
 h2(#history). Version history
+
+h3. 0.2.7 (Jun 6, 2010)
+
+Fixed bug in @index_ignore@ attribute. (Thanks to th3lonius for spotting it.)
 
 h3. 0.2.6 (Mar 8, 2010)
 
