@@ -1,7 +1,7 @@
 <?php
 
 $plugin['name'] = 'soo_article_filter';
-$plugin['version'] = '0.2.7';
+$plugin['version'] = '0.3.0';
 $plugin['author'] = 'Jeff Soo';
 $plugin['author_uri'] = 'http://ipsedixit.net/txp/';
 $plugin['description'] = 'Create filtered list of articles before sending to txp:article or txp:article_custom';
@@ -31,25 +31,26 @@ function soo_article_filter( $atts, $thing ) {
 		'index_field'	=> null,	// custom field name for index-style title
 		'update_set'	=> null,	// SET clause for custom update query
 		'update_where'	=> null,	// WHERE clause for custom update query
+		'where'			=> null,	// raw WHERE expression for filter
 	);
 	extract(lAtts($standardAtts + $customAtts, $atts));
 	if ( ! is_null($expires) )
 		switch ( $expires ) {
 			case 'any':
-				$where[] = 'Expires > 0';
+				$where_exp[] = 'Expires > 0';
 				break;
 			case 'past':
-				$where[] = 'Expires <= now() and Expires > 0';
+				$where_exp[] = 'Expires <= now() and Expires > 0';
 				break;
 			case 'future':
-				$where[] = 'Expires > now()';
+				$where_exp[] = 'Expires > now()';
 				break;
 			case 0:
-				$where[] = 'Expires = 0';
+				$where_exp[] = 'Expires = 0';
 		}
 
 	if ( ! is_null($article_image) )
-		$where[] = 'Image ' . ( $article_image ? '!' : '' ) . "= ''";
+		$where_exp[] = 'Image ' . ( $article_image ? '!' : '' ) . "= ''";
 
 	if ( $customFields )
 		foreach( $customFields as $i => $field )
@@ -58,21 +59,23 @@ function soo_article_filter( $atts, $thing ) {
 				$value = $atts[$field];
 				switch ( $value ) {
 					case '':
-						$where[] = "custom_$i = ''";
+						$where_exp[] = "custom_$i = ''";
 						break;
 					default:
-						$where[] = "custom_$i regexp '$value'";
+						$where_exp[] = "custom_$i regexp '$value'";
 				}
 			}
 	
 	if ( $multidoc and _soo_multidoc_ids_init() ) {
 		global $soo_multidoc;
-		$where[] = "ID not in (" . implode(',', $soo_multidoc['noindex']) . ")";
+		$where_exp[] = "ID not in (" . implode(',', $soo_multidoc['noindex']) . ")";
 	}
+	
+	if ( $where ) $where_exp[] = $where;
 	
 	$select = '*';
 	$table = safe_pfx('textpattern');
-	$where = isset($where) ? ' where ' . implode(' and ', $where) : '';
+	$where_exp = isset($where_exp) ? ' where ' . implode(' and ', $where_exp) : '';
 	
 	if ( $index_field ) {
 		$i = array_search($index_field, $customFields);
@@ -91,7 +94,7 @@ function soo_article_filter( $atts, $thing ) {
 		}
 	}
 		
-	if ( ! safe_query("create temporary table $table select $select from $table" . $where) )
+	if ( ! safe_query("create temporary table $table select $select from $table" . $where_exp) )
 		return;
 	
 	if ( $update_set )
@@ -160,6 +163,7 @@ h2. Contents
 ** "Custom field includes ...":#custom_includes
 ** "Custom field matches regular expression":#custom_regexp
 ** "Articles with an assigned image":#image
+** "Select on a numeric range":#range
 ** "Alphabetical index":#index
 ** "Change article status":#update
 * "Technical notes":#notes
@@ -209,7 +213,13 @@ For use with the "soo_multidoc":http://ipsedixit.net/txp/24/multidoc plugin. See
 * @index_field@ _(custom field name)_ Set this to the name of an existing custom field to hold index-style titles (e.g. "The Title" becomes "Title, The"). %(default)Default% empty.
 * @update_set@ _(SQL clause)_ %(default)default% empty. Set this (and, optionally, @update_where@) to run an @UPDATE@ query on the temporary table.
 * @update_where@ _(SQL clause)_ %(default)default% "1=1". Use this in conjunction with @update_where@ to run an @UPDATE@ query on the temporary table.
+* @where@ _(SQL clause)_ %(default)default% empty. Any text here will be added to the end of the array of @WHERE@ expressions used for article selection.
 
+h2(#complex). Complex selection
+
+The selection attributes (@expires@, @customfieldname@, @article_image@, @multidoc@, and @where@) may be used in combination. The result is a conjunctive (@AND@) search, i.e., each additional attribute makes the filter more restrictive.
+
+The @where@ attribute allows you to enter MySQL expressions and functions for even greater power.
 
 h2(#examples). Examples
 
@@ -257,6 +267,12 @@ pre. <txp:soo_article_filter article_image="1">
 <txp:article>
 <txp:permlink><txp:article_image thumbnail="1" /></txp:permlink>
 </txp:article>
+</txp:soo_article_filter>
+
+h3(#range). Use @where@ to select on a numeric range
+
+pre. <txp:soo_article_filter where="image BETWEEN 4 AND 27">
+<txp:article />
 </txp:soo_article_filter>
 
 h3(#index). An alphabetical index using @index_ignore@ and @index_field@
@@ -315,6 +331,10 @@ The "soo_multidoc":http://ipsedixit.net/txp/24/multidoc plugin also uses the tem
 Note that, unlike Multidoc's built-in filter, @soo_article_filter@ does not distinguish between list and individual article context, so if your Multidoc setup uses the same @article@ tag for lists and individual articles you will have change this. (This is deliberate; it allows you to use @soo_article_filter@ for an @article_custom@ list on an individual article page.)
 
 h2(#history). Version history
+
+h3. 0.3.0 (Jul 11, 2010)
+
+New attribute: @where@, allows you to add a raw @WHERE@ expression to the selection criteria. (Thanks to Victor for the idea.)
 
 h3. 0.2.7 (Jun 6, 2010)
 
