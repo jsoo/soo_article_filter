@@ -1,7 +1,7 @@
 <?php
 
 $plugin['name'] = 'soo_article_filter';
-$plugin['version'] = '0.3.0';
+$plugin['version'] = '0.3.1';
 $plugin['author'] = 'Jeff Soo';
 $plugin['author_uri'] = 'http://ipsedixit.net/txp/';
 $plugin['description'] = 'Create filtered list of articles before sending to txp:article or txp:article_custom';
@@ -32,6 +32,9 @@ function soo_article_filter( $atts, $thing ) {
 		'update_set'	=> null,	// SET clause for custom update query
 		'update_where'	=> null,	// WHERE clause for custom update query
 		'where'			=> null,	// raw WHERE expression for filter
+		'limit'			=> null,	// LIMIT value
+		'offset'		=> null,	// OFFSET value
+		'sort'			=> null,	// ORDER BY expression
 	);
 	extract(lAtts($standardAtts + $customAtts, $atts));
 	if ( ! is_null($expires) )
@@ -76,6 +79,8 @@ function soo_article_filter( $atts, $thing ) {
 	$select = '*';
 	$table = safe_pfx('textpattern');
 	$where_exp = isset($where_exp) ? ' where ' . implode(' and ', $where_exp) : '';
+	$sort = $sort ? ' order by ' . doSlash($sort) : '';
+	$limit = $limit ? ' limit ' . intval($offset) . ',' . intval($limit) : '';
 	
 	if ( $index_field ) {
 		$i = array_search($index_field, $customFields);
@@ -94,7 +99,7 @@ function soo_article_filter( $atts, $thing ) {
 		}
 	}
 		
-	if ( ! safe_query("create temporary table $table select $select from $table" . $where_exp) )
+	if ( ! safe_query("create temporary table $table select $select from $table" . $where_exp . $sort . $limit) )
 		return;
 	
 	if ( $update_set )
@@ -163,6 +168,7 @@ h2. Contents
 ** "Custom field includes ...":#custom_includes
 ** "Custom field matches regular expression":#custom_regexp
 ** "Articles with an assigned image":#image
+** "Latest article with an assigned image":#latest_image
 ** "Select on a numeric range":#range
 ** "Alphabetical index":#index
 ** "Change article status":#update
@@ -214,6 +220,9 @@ For use with the "soo_multidoc":http://ipsedixit.net/txp/24/multidoc plugin. See
 * @update_set@ _(SQL clause)_ %(default)default% empty. Set this (and, optionally, @update_where@) to run an @UPDATE@ query on the temporary table.
 * @update_where@ _(SQL clause)_ %(default)default% "1=1". Use this in conjunction with @update_where@ to run an @UPDATE@ query on the temporary table.
 * @where@ _(SQL clause)_ %(default)default% empty. Any text here will be added to the end of the array of @WHERE@ expressions used for article selection.
+* @limit@ _(integer)_ Number of articles to select. %(default)default% unset, no limit.
+* @offset@ _(integer)_ Number of articles to skip. %(default)default% unset, no offset.
+* @sort@ _(Column [direction])_ Sort column (and optional sort direction), e.g. @Posted asc@. %(default)default% unset.
 
 h2(#complex). Complex selection
 
@@ -269,6 +278,16 @@ pre. <txp:soo_article_filter article_image="1">
 </txp:article>
 </txp:soo_article_filter>
 
+h3(#latest_image). Only show the most recent article with an article image
+
+pre. <txp:soo_article_filter article_image="1" limit="1" sort="Posted desc">
+<txp:article>
+<txp:permlink><txp:article_image thumbnail="1" /></txp:permlink>
+</txp:article>
+</txp:soo_article_filter>
+
+(Note: while you could declare the @limit@ in the @article@ tag, this method uses less memory.)
+
 h3(#range). Use @where@ to select on a numeric range
 
 pre. <txp:soo_article_filter where="image BETWEEN 4 AND 27">
@@ -317,7 +336,7 @@ h3(#performance). Performance considerations
 
 Most plugins that give you a souped-up equivalent of @article@ or @article_custom@ have to duplicate and modify @doArticles()@ plus a couple of other core Txp functions. Less than ideal, at least in terms of ease of plugin authoring, because @doArticles()@ is quite a lot of code to duplicate and edit in a plugin.
 
-This plugin takes a very different approach--it creates a temporary table holding a filtered set of articles, thus allowing you to use @article@ and/or @article_custom@ normally. Code-wise this is very simple; performance-wise it might be inferior (I don't know). In my limited and informal testing the extra time required for dealing with the temporary table is a non-issue. This could change with a very large @textpattern@ (articles) table. But as long as you set @soo_article_filter@'s attributes so as to produce a relatively small number of articles, there shouldn't be a problem in most cases.
+This plugin takes a very different approach--it creates a temporary table holding a filtered set of articles, thus allowing you to use @article@ and/or @article_custom@ normally. Code-wise this is very simple; performance-wise it might be inferior (I don't know). In my limited and informal testing the extra time required for dealing with the temporary table is a non-issue. This could change with a very large @textpattern@ (articles) table. But as long as you set @soo_article_filter@'s attributes so as to produce a relatively small number of articles, there shouldn't be a problem in most cases. (Version 0.3.1 adds @limit@, @offset@, and @sort@ attributes to make it easier to target the exact articles you want.)
 
 Might be another story on a highly-optimized, large, high-traffic website where maximum performance is a major concern.
 
@@ -331,6 +350,10 @@ The "soo_multidoc":http://ipsedixit.net/txp/24/multidoc plugin also uses the tem
 Note that, unlike Multidoc's built-in filter, @soo_article_filter@ does not distinguish between list and individual article context, so if your Multidoc setup uses the same @article@ tag for lists and individual articles you will have change this. (This is deliberate; it allows you to use @soo_article_filter@ for an @article_custom@ list on an individual article page.)
 
 h2(#history). Version history
+
+h3. 0.3.1 (Dec 9, 2010)
+
+Added @limit@, @offset@, and @sort@ attributes.
 
 h3. 0.3.0 (Jul 11, 2010)
 
