@@ -1,7 +1,7 @@
 <?php
 
 $plugin['name'] = 'soo_article_filter';
-$plugin['version'] = '0.3.1';
+$plugin['version'] = '0.3.2';
 $plugin['author'] = 'Jeff Soo';
 $plugin['author_uri'] = 'http://ipsedixit.net/txp/';
 $plugin['description'] = 'Create filtered list of articles before sending to txp:article or txp:article_custom';
@@ -71,7 +71,7 @@ function soo_article_filter( $atts, $thing ) {
 	
 	if ( $multidoc and _soo_multidoc_ids_init() ) {
 		global $soo_multidoc;
-		$where_exp[] = "ID not in (" . implode(',', $soo_multidoc['noindex']) . ")";
+		$where_exp[] = "ID not in (select id from " . safe_pfx('soo_multidoc') . " where id != root)";
 	}
 	
 	if ( $where ) $where_exp[] = $where;
@@ -350,6 +350,10 @@ The "soo_multidoc":http://ipsedixit.net/txp/24/multidoc plugin also uses the tem
 Note that, unlike Multidoc's built-in filter, @soo_article_filter@ does not distinguish between list and individual article context, so if your Multidoc setup uses the same @article@ tag for lists and individual articles you will have change this. (This is deliberate; it allows you to use @soo_article_filter@ for an @article_custom@ list on an individual article page.)
 
 h2(#history). Version history
+
+h3. 0.3.2 (Jan 3, 2011)
+
+Multidoc compatibility update
 
 h3. 0.3.1 (Dec 9, 2010)
 
