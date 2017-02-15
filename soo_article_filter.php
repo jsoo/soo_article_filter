@@ -1,7 +1,7 @@
 <?php
 
 $plugin['name'] = 'soo_article_filter';
-$plugin['version'] = '0.3.2';
+$plugin['version'] = '0.3.3';
 $plugin['author'] = 'Jeff Soo';
 $plugin['author_uri'] = 'http://ipsedixit.net/txp/';
 $plugin['description'] = 'Create filtered list of articles before sending to txp:article or txp:article_custom';
@@ -15,6 +15,11 @@ $plugin['type'] = 0;
 @include_once('zem_tpl.php');
 
 # --- BEGIN PLUGIN CODE ---
+
+if(class_exists('\Textpattern\Tag\Registry')) {
+	Txp::get('\Textpattern\Tag\Registry')
+		->register('soo_article_filter');
+}
 
 function soo_article_filter( $atts, $thing ) {
 
@@ -350,6 +355,10 @@ The "soo_multidoc":http://ipsedixit.net/txp/24/multidoc plugin also uses the tem
 Note that, unlike Multidoc's built-in filter, @soo_article_filter@ does not distinguish between list and individual article context, so if your Multidoc setup uses the same @article@ tag for lists and individual articles you will have change this. (This is deliberate; it allows you to use @soo_article_filter@ for an @article_custom@ list on an individual article page.)
 
 h2(#history). Version history
+
+h3. 0.3.3 (2017/02/15)
+
+Textpattern 4.6 compatibility update
 
 h3. 0.3.2 (Jan 3, 2011)
 
